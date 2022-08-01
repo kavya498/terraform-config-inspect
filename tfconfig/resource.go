@@ -8,9 +8,10 @@ import (
 
 // Resource represents a single "resource" or "data" block within a module.
 type Resource struct {
-	Mode ResourceMode `json:"mode"`
-	Type string       `json:"type"`
-	Name string       `json:"name"`
+	Mode       ResourceMode           `json:"mode"`
+	Type       string                 `json:"type"`
+	Name       string                 `json:"name"`
+	Attributes map[string]interface{} `json:"attributes,omitempty"`
 
 	Provider ProviderRef `json:"provider"`
 

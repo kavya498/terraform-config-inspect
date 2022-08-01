@@ -103,14 +103,15 @@ func loadModuleLegacyHCL(fs FS, dir string) (*Module, Diagnostics) {
 					}
 					block.Default = def
 				}
-
+				blockRequiredValue := block.Default == nil
+				pos := sourcePosLegacyHCL(item.Pos(), filename)
 				v := &Variable{
 					Name:        name,
 					Type:        block.Type,
 					Description: block.Description,
 					Default:     block.Default,
-					Required:    block.Default == nil,
-					Pos:         sourcePosLegacyHCL(item.Pos(), filename),
+					Required:    &blockRequiredValue,
+					Pos:         &pos,
 				}
 				if _, exists := mod.Variables[name]; exists {
 					return nil, diagnosticsErrorf("duplicate variable block for %q", name)

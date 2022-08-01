@@ -1,7 +1,9 @@
 package tfconfig
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"path/filepath"
 	"strings"
 
@@ -12,6 +14,236 @@ import (
 // it as a Terraform module.
 func LoadModule(dir string) (*Module, Diagnostics) {
 	return LoadModuleFromFilesystem(NewOsFs(), dir)
+}
+func LoadIBMModule(dir string, metadataPath string) (*Module, Diagnostics) {
+	var metadata map[string]interface{}
+	var err Diagnostics
+	loadModule, LoadModuleFromFilesystemErr := LoadModuleFromFilesystem(NewOsFs(), dir)
+
+	if LoadModuleFromFilesystemErr != nil {
+		err = append(err, Diagnostic{
+			Severity: DiagError,
+			Summary:  "LoadModuleFromFilesystemErr",
+			Detail:   fmt.Sprintf("%s", LoadModuleFromFilesystemErr),
+		})
+	}
+	if metadataPath != "" {
+		metadataBytes, metadataErr := ioutil.ReadFile(metadataPath)
+		if metadataErr != nil {
+			err = append(err, Diagnostic{
+				Severity: DiagError,
+				Summary:  "metadataErr",
+				Detail:   fmt.Sprintf("Failed to read metadataPath file %s", metadataPath),
+			})
+		}
+
+		unmarshalErr := json.Unmarshal([]byte(metadataBytes), &metadata)
+		if unmarshalErr != nil {
+			err = append(err, Diagnostic{
+				Severity: DiagError,
+				Summary:  "unmarshalErr",
+				Detail:   fmt.Sprintf("Failed to unmarshal metadata json %s.", metadataPath),
+			})
+		}
+	}
+	if loadModule.DataResources != nil {
+		findMetadata("data", loadModule.DataResources, loadModule.Variables, metadata)
+	}
+	if loadModule.ManagedResources != nil {
+		findMetadata("resource", loadModule.ManagedResources, loadModule.Variables, metadata)
+	}
+	if loadModule.ModuleCalls != nil && len(loadModule.ModuleCalls) != 0 {
+		loadModuleErr := findModuleMetadata(dir, metadataPath, loadModule.ModuleCalls, loadModule.Variables, metadata)
+		if loadModuleErr != nil {
+			err = append(err, Diagnostic{
+				Severity: DiagError,
+				Summary:  "loadModuleErr",
+				Detail:   fmt.Sprintf("Failed to load modules %s", loadModuleErr),
+			})
+		}
+	}
+	return loadModule, err
+}
+func findModuleMetadata(dir, metadataPath string, modules map[string]*ModuleCall, variables map[string]*Variable, metadata map[string]interface{}) Diagnostics {
+	var err Diagnostics
+	fileInfo, moduleDirErr := ioutil.ReadDir(dir + "/.terraform/modules/")
+	if moduleDirErr != nil {
+		err = append(err, Diagnostic{
+			Severity: DiagError,
+			Summary:  "moduleDirErr",
+			Detail:   fmt.Sprintf("Failed to read init module directory of %s", dir+"/.terraform/modules/"),
+		})
+	}
+	fileStruct := make(map[string]interface{})
+	for _, f := range fileInfo {
+		if f.IsDir() {
+			fileStruct[f.Name()] = struct{}{}
+		}
+	}
+	for _, module := range modules {
+		if module.Attributes != nil {
+			modulePath := dir + "/" + module.Source
+			if _, ok := fileStruct[module.Name]; ok {
+				modulePath = dir + "/.terraform/modules/" + module.Name
+				modulePathSplit := strings.Split(module.Source, "//")
+				if len(modulePathSplit) > 1 {
+					modulePath = modulePath + "/" + modulePathSplit[1]
+				}
+			}
+
+			loadedModulePath, LoadIBMModuleErr := LoadIBMModule(modulePath, metadataPath)
+			if LoadIBMModuleErr != nil {
+				err = append(err, Diagnostic{
+					Severity: DiagError,
+					Summary:  "LoadIBMModuleErr",
+					Detail:   fmt.Sprintf("Error while loading child modules %s", LoadIBMModuleErr),
+				})
+			}
+			for moduleAttribute, moduleVariableValue := range module.Attributes {
+				if modulevariable, ok := variables[moduleVariableValue.(string)]; ok {
+					source := "module." + module.Name
+					if v, ok := loadedModulePath.Variables[moduleAttribute]; ok && len(v.Source) > 0 {
+						source = source + "." + v.Source[len(v.Source)-1]
+						modulevariable.Aliases = v.Aliases
+						modulevariable.AllowedValues = v.AllowedValues
+						modulevariable.CloudDataRange = v.CloudDataRange
+						modulevariable.CloudDataType = v.CloudDataType
+						modulevariable.Computed = v.Computed
+						if modulevariable.Default == nil {
+							modulevariable.Default = v.Default
+						}
+						modulevariable.Deprecated = v.Deprecated
+						if modulevariable.Description == "" {
+							modulevariable.Description = v.Description
+						}
+						modulevariable.Elem = v.Elem
+						modulevariable.Hidden = v.Hidden
+						modulevariable.Immutable = v.Immutable
+						modulevariable.LinkStatus = v.LinkStatus
+						modulevariable.Matches = v.Matches
+						modulevariable.MaxItems = v.MaxItems
+						modulevariable.MaxValue = v.MaxValue
+						modulevariable.MaxValueLength = v.MaxValueLength
+						modulevariable.MinItems = v.MinItems
+						modulevariable.MinValue = v.MinValue
+						modulevariable.MinValueLength = v.MinValueLength
+						modulevariable.Optional = v.Optional
+						if modulevariable.Required == nil {
+							modulevariable.Required = v.Required
+						}
+						if modulevariable.Sensitive == nil {
+							modulevariable.Sensitive = v.Sensitive
+						}
+					}
+					modulevariable.Source = append(modulevariable.Source, source)
+				}
+			}
+		}
+	}
+	return err
+}
+func findMetadata(moduleType string, resources map[string]*Resource, variables map[string]*Variable, metadata map[string]interface{}) {
+	for _, resource := range resources {
+		for resourceAttribute, resourceVariable := range resource.Attributes {
+			if v, ok := variables[resourceVariable.(string)]; ok {
+				source := resource.Type + "." + resource.Name + "." + resourceAttribute
+				if moduleType == "data" {
+					source = "data" + "." + source
+					if d, ok := metadata["Datasources"]; ok {
+						ExtractMetadata(v, d, resource.Type, resourceAttribute)
+					}
+				}
+				if moduleType == "resource" {
+					if r, ok := metadata["Resources"]; ok {
+						ExtractMetadata(v, r, resource.Type, resourceAttribute)
+					}
+				}
+				v.Source = append(v.Source, source)
+
+			}
+		}
+	}
+}
+func ExtractMetadata(v *Variable, m interface{}, moduleName, moduleAttribute string) {
+
+	if ma, ok := m.(map[string]interface{})[moduleName]; ok {
+		for _, argument := range ma.([]interface{}) {
+			arg := argument.(map[string]interface{})
+			if arg["name"] == moduleAttribute {
+				if a, ok := arg["aliases"]; ok {
+					v.Aliases = a.([]string)
+				}
+				if a, ok := arg["options"]; ok {
+					v.AllowedValues = a.(string)
+				}
+				if a, ok := arg["cloud_data_type"]; ok {
+					v.CloudDataType = a.(string)
+				}
+				if a, ok := arg["computed"]; ok {
+					v.Computed = a.(bool)
+				}
+				if a, ok := arg["default"]; ok && v.Default == nil {
+					v.Default = a
+				}
+				if a, ok := arg["description"]; ok && v.Description == "" {
+					v.Description = a.(string)
+				}
+				if a, ok := arg["elem"]; ok {
+					v.Elem = a
+				}
+				if a, ok := arg["hidden"]; ok {
+					v.Hidden = a.(bool)
+				}
+				if a, ok := arg["immutable"]; ok {
+					v.Immutable = a.(bool)
+				}
+				if a, ok := arg["link_status"]; ok {
+					v.LinkStatus = a.(string)
+				}
+				if a, ok := arg["matches"]; ok {
+					v.Matches = a.(string)
+				}
+				if a, ok := arg["max_items"]; ok {
+					v.MaxItems = a.(int)
+				}
+				if a, ok := arg["max_value"]; ok {
+					v.MaxValue = a.(string)
+				}
+				if a, ok := arg["min_items"]; ok {
+					v.MinItems = a.(int)
+				}
+				if a, ok := arg["min_value"]; ok {
+					v.MinValue = a.(string)
+				}
+				if a, ok := arg["min_length"]; ok {
+					v.MinValueLength = a
+				}
+				if a, ok := arg["max_length"]; ok {
+					v.MaxValueLength = a
+				}
+				if a, ok := arg["required"]; ok && v.Required == nil {
+					required := a.(bool)
+					v.Required = &required
+
+				}
+				if a, ok := arg["optional"]; ok {
+					optional := a.(bool)
+					v.Optional = &optional
+				}
+				if a, ok := arg["secure"]; ok && v.Sensitive == nil {
+					v.Sensitive = a.(*bool)
+				}
+				if a, ok := arg["deprecated"]; ok {
+					v.Deprecated = a.(string)
+				}
+				if a, ok := arg["cloud_data_range"]; ok {
+					v.CloudDataRange = a.([]interface{})
+				}
+			}
+
+		}
+	}
+
 }
 
 // LoadModuleFromFilesystem reads the directory at the given path
