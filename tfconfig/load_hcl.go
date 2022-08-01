@@ -57,7 +57,6 @@ func LoadModuleFromFile(file *hcl.File, mod *Module) hcl.Diagnostics {
 	var diags hcl.Diagnostics
 	content, _, contentDiags := file.Body.PartialContent(rootSchema)
 	diags = append(diags, contentDiags...)
-
 	for _, block := range content.Blocks {
 		switch block.Type {
 
@@ -108,9 +107,10 @@ func LoadModuleFromFile(file *hcl.File, mod *Module) hcl.Diagnostics {
 			diags = append(diags, contentDiags...)
 
 			name := block.Labels[0]
+			pos := sourcePosHCL(block.DefRange)
 			v := &Variable{
 				Name: name,
-				Pos:  sourcePosHCL(block.DefRange),
+				Pos:  &pos,
 			}
 
 			mod.Variables[name] = v
@@ -172,14 +172,15 @@ func LoadModuleFromFile(file *hcl.File, mod *Module) hcl.Diagnostics {
 					v.Default = def
 				}
 			} else {
-				v.Required = true
+				requiredValue := true
+				v.Required = &requiredValue
 			}
 
 			if attr, defined := content.Attributes["sensitive"]; defined {
 				var sensitive bool
 				valDiags := gohcl.DecodeExpression(attr.Expr, nil, &sensitive)
 				diags = append(diags, valDiags...)
-				v.Sensitive = sensitive
+				v.Sensitive = &sensitive
 			}
 
 		case "output":
@@ -251,11 +252,26 @@ func LoadModuleFromFile(file *hcl.File, mod *Module) hcl.Diagnostics {
 
 			typeName := block.Labels[0]
 			name := block.Labels[1]
-
+			//add code to get attribute that has variable references
+			bodycontent, _ := block.Body.JustAttributes()
+			resourceAttributes := make(map[string]interface{})
+			for _, c := range bodycontent {
+				if c != nil && c.Expr != nil {
+					t := c.Expr.Variables()
+					if len(t) > 0 && len(t[0]) > 1 && t[0][1] != nil && t[0][0].(hcl.TraverseRoot).Name == "var" {
+						// resourceReference := typeName + "." + name
+						resourceArgument := c.Name
+						resourceVariable := t[0][1].(hcl.TraverseAttr).Name
+						resourceAttributes[resourceArgument] = resourceVariable
+						// log.Println(resourceReference, resourceArgument, resourceVariable)
+					}
+				}
+			}
 			r := &Resource{
-				Type: typeName,
-				Name: name,
-				Pos:  sourcePosHCL(block.DefRange),
+				Type:       typeName,
+				Name:       name,
+				Attributes: resourceAttributes,
+				Pos:        sourcePosHCL(block.DefRange),
 			}
 
 			var resourcesMap map[string]*Resource
@@ -272,7 +288,6 @@ func LoadModuleFromFile(file *hcl.File, mod *Module) hcl.Diagnostics {
 			key := r.MapKey()
 
 			resourcesMap[key] = r
-
 			if attr, defined := content.Attributes["provider"]; defined {
 				// New style here is to provide this as a naked traversal
 				// expression, but we also support quoted references for
@@ -329,9 +344,25 @@ func LoadModuleFromFile(file *hcl.File, mod *Module) hcl.Diagnostics {
 			diags = append(diags, contentDiags...)
 
 			name := block.Labels[0]
+			bodycontent, _ := block.Body.JustAttributes()
+			moduleAttributes := make(map[string]interface{})
+			for _, c := range bodycontent {
+				if c != nil && c.Expr != nil {
+					t := c.Expr.Variables()
+					if len(t) > 0 && len(t[0]) > 1 && t[0][1] != nil && t[0][0].(hcl.TraverseRoot).Name == "var" {
+						// moduleReference := "module." + name
+						resourceArgument := c.Name
+						resourceVariable := t[0][1].(hcl.TraverseAttr).Name
+						moduleAttributes[resourceArgument] = resourceVariable
+						// log.Println(moduleReference, resourceArgument, resourceVariable)
+					}
+				}
+			}
+
 			mc := &ModuleCall{
-				Name: block.Labels[0],
-				Pos:  sourcePosHCL(block.DefRange),
+				Name:       block.Labels[0],
+				Pos:        sourcePosHCL(block.DefRange),
+				Attributes: moduleAttributes,
 			}
 
 			// check if this is overriding an existing module
@@ -366,6 +397,5 @@ func LoadModuleFromFile(file *hcl.File, mod *Module) hcl.Diagnostics {
 			panic(fmt.Errorf("unhandled block type %q", block.Type))
 		}
 	}
-
 	return diags
 }

@@ -38,7 +38,7 @@ func TestRenderMarkdown(t *testing.T) {
 
 			var b bytes.Buffer
 			buf := &b
-			err = RenderMarkdown(buf, module)
+			err = RenderMarkdown(buf, module, false)
 			if err != nil {
 				t.Fatal(err)
 			}

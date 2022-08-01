@@ -7,7 +7,7 @@ import (
 	"text/template"
 )
 
-func RenderMarkdown(w io.Writer, module *Module) error {
+func RenderMarkdown(w io.Writer, module *Module, variable bool) error {
 	tmpl := template.New("md")
 	tmpl.Funcs(template.FuncMap{
 		"tt": func(s string) string {
@@ -31,7 +31,12 @@ func RenderMarkdown(w io.Writer, module *Module) error {
 			}
 		},
 	})
-	template.Must(tmpl.Parse(markdownTemplate))
+	if variable {
+		template.Must(tmpl.Parse(markdownVariableTemplate))
+	} else {
+		template.Must(tmpl.Parse(markdownTemplate))
+	}
+
 	return tmpl.Execute(w, module)
 }
 
@@ -100,6 +105,19 @@ Provider Requirements:
 {{ .Detail }}
 {{- end }}
 
+{{- end}}{{end}}
+
+`
+
+const markdownVariableTemplate = `
+# Module {{ tt .Path }}
+
+{{- if .Variables}}
+
+## Input Variables
+{{- range .Variables }}
+* {{ tt .Name }}{{ if .Required }} (required){{else}} (default {{ json .Default | tt }}){{end}}
+{{- if .Description}}: {{ .Description }}{{ end }}
 {{- end}}{{end}}
 
 `
