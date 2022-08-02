@@ -15,11 +15,12 @@ import (
 func LoadModule(dir string) (*Module, Diagnostics) {
 	return LoadModuleFromFilesystem(NewOsFs(), dir)
 }
+
+// LoadIBMModule takes template file directory and metadataPath as input and returns final module struct.
 func LoadIBMModule(dir string, metadataPath string) (*Module, Diagnostics) {
 	var metadata map[string]interface{}
 	var err Diagnostics
 	loadModule, LoadModuleFromFilesystemErr := LoadModuleFromFilesystem(NewOsFs(), dir)
-
 	if LoadModuleFromFilesystemErr != nil {
 		err = append(err, Diagnostic{
 			Severity: DiagError,
@@ -46,6 +47,7 @@ func LoadIBMModule(dir string, metadataPath string) (*Module, Diagnostics) {
 			})
 		}
 	}
+	// Once the template is loaded and the Module is extracted, find metadata for variables using Module struct and above metadata file.
 	if loadModule.DataResources != nil {
 		findMetadata("data", loadModule.DataResources, loadModule.Variables, metadata)
 	}
@@ -64,6 +66,12 @@ func LoadIBMModule(dir string, metadataPath string) (*Module, Diagnostics) {
 	}
 	return loadModule, err
 }
+
+//findModuleMetadata:
+// dir -->template file directory and metadataPath
+// modules --> modules details from Module struct, variables --> variables from module struct and metadata json as inputs
+// This function first checks for downloaded modules of terraform init under /.terraform/modules/  directory
+// If the module name from modules struct matches any of the downloaded module, repeat the extraction LoadIBMModule
 func findModuleMetadata(dir, metadataPath string, modules map[string]*ModuleCall, variables map[string]*Variable, metadata map[string]interface{}) Diagnostics {
 	var err Diagnostics
 	fileInfo, moduleDirErr := ioutil.ReadDir(dir + "/.terraform/modules/")
@@ -90,7 +98,7 @@ func findModuleMetadata(dir, metadataPath string, modules map[string]*ModuleCall
 					modulePath = modulePath + "/" + modulePathSplit[1]
 				}
 			}
-
+			// Load inner module
 			loadedModulePath, LoadIBMModuleErr := LoadIBMModule(modulePath, metadataPath)
 			if LoadIBMModuleErr != nil {
 				err = append(err, Diagnostic{
@@ -99,6 +107,9 @@ func findModuleMetadata(dir, metadataPath string, modules map[string]*ModuleCall
 					Detail:   fmt.Sprintf("Error while loading child modules %s", LoadIBMModuleErr),
 				})
 			}
+			// For attributes of modules if variable assigned to the attribute matches any of the Variables struct
+			// and if moduleAttribute is present in inner module's variable reference,
+			// assign all inner module's variable metadata to  modulevariable.
 			for moduleAttribute, moduleVariableValue := range module.Attributes {
 				if modulevariable, ok := variables[moduleVariableValue.(string)]; ok {
 					source := "module." + module.Name
@@ -142,6 +153,14 @@ func findModuleMetadata(dir, metadataPath string, modules map[string]*ModuleCall
 	}
 	return err
 }
+
+// findMetadata: This function is common for both resource and datasource.
+// This takes moduleType --> data/resource,
+// resources --> can be resource or datasource details from Module struct,
+// variables --> variables from module struct and metadata json as inputs
+// This checks if a variable reference is present in any of resource attributes.
+// If found, it maps variable to resource/datasource, forms source and extracts provider metadata for that attribute using provider metadata json.
+
 func findMetadata(moduleType string, resources map[string]*Resource, variables map[string]*Variable, metadata map[string]interface{}) {
 	for _, resource := range resources {
 		for resourceAttribute, resourceVariable := range resource.Attributes {
@@ -164,6 +183,14 @@ func findMetadata(moduleType string, resources map[string]*Resource, variables m
 		}
 	}
 }
+
+// ExtractMetadata: Takes v --> Variables,
+// m --> resource or datasource metadata from metadata json file,
+// moduleName -->  resource/datasource name
+// moduleAttribute --> attribute of which metadata has to be extracted.
+//This function check if moduleName has any metadata in m (metadata file), If present,
+// It checks moduleAttribute is present in moduleName metadata, If Present, assign all the metadata to the variable v
+
 func ExtractMetadata(v *Variable, m interface{}, moduleName, moduleAttribute string) {
 
 	if ma, ok := m.(map[string]interface{})[moduleName]; ok {

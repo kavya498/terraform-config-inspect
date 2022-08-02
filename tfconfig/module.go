@@ -22,6 +22,10 @@ type Module struct {
 	// since this slice is also returned as a second argument from LoadModule.
 	Diagnostics Diagnostics `json:"diagnostics,omitempty"`
 }
+type Metadata struct {
+	Variables map[string]*Variable `json:"variables"`
+	Outputs   map[string]*Output   `json:"outputs,omitempty"`
+}
 
 // ProviderConfig represents a provider block in the configuration
 type ProviderConfig struct {

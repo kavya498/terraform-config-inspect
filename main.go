@@ -15,6 +15,7 @@ var showJSON = flag.Bool("json", false, "produce JSON-formatted output")
 var metadataJsonFile = flag.String("metadata", "", "Provider metadata json file path")
 var showVariables = flag.Bool("variables", false, "produce JSON-formatted output for variables")
 
+// This function expects users to pass template path else it takes current path ./
 func main() {
 	flag.Parse()
 
@@ -24,8 +25,9 @@ func main() {
 	} else {
 		dir = "."
 	}
+	// If --metadata flag is provided, it parses through provider metdata file and extracts additional details of a given variable.
+	// else it ll parse and fetch just the terraform template config.
 	var module *tfconfig.Module
-
 	if *metadataJsonFile != "" {
 		var err tfconfig.Diagnostics
 		module, err = tfconfig.LoadIBMModule(dir, *metadataJsonFile)
@@ -37,7 +39,6 @@ func main() {
 			})
 			log.Fatal(err)
 		}
-
 	} else {
 		module, _ = tfconfig.LoadModule(dir)
 	}
@@ -56,6 +57,7 @@ func main() {
 func showModuleJSON(module *tfconfig.Module, variable bool) {
 
 	if variable {
+		metadataJson := tfconfig.Metadata{}
 		variables := module.Variables
 		for k, v := range variables {
 			if v.Source != nil {
@@ -67,7 +69,8 @@ func showModuleJSON(module *tfconfig.Module, variable bool) {
 			}
 			variables[k] = v
 		}
-		j, err := json.MarshalIndent(variables, "", "  ")
+		metadataJson.Variables = variables
+		j, err := json.MarshalIndent(metadataJson, "", "  ")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error producing JSON: %s\n", err)
 			os.Exit(2)
