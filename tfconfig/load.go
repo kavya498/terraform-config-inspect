@@ -33,7 +33,7 @@ func LoadIBMModule(dir string, metadataPath string) (*Module, Diagnostics) {
 			err = append(err, Diagnostic{
 				Severity: DiagError,
 				Summary:  "metadataErr",
-				Detail:   fmt.Sprintf("Failed to read metadataPath file %s", metadataPath),
+				Detail:   fmt.Sprintf("Failed to read metadataPath file %s %s", metadataPath, metadataErr),
 			})
 		}
 
@@ -42,7 +42,7 @@ func LoadIBMModule(dir string, metadataPath string) (*Module, Diagnostics) {
 			err = append(err, Diagnostic{
 				Severity: DiagError,
 				Summary:  "unmarshalErr",
-				Detail:   fmt.Sprintf("Failed to unmarshal metadata json %s.", metadataPath),
+				Detail:   fmt.Sprintf("Failed to unmarshal metadata json %s: %s", metadataPath, unmarshalErr),
 			})
 		}
 	}

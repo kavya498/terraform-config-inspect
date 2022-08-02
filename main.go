@@ -11,9 +11,9 @@ import (
 )
 
 var showJSON = flag.Bool("json", false, "produce JSON-formatted output")
-var ibmModule = flag.Bool("ibm", false, "generate ibm related template metadata")
+
 var metadataJsonFile = flag.String("metadata", "", "Provider metadata json file path")
-var showVariables = flag.Bool("variables", false, "Variable metadata json file path")
+var showVariables = flag.Bool("variables", false, "produce JSON-formatted output for variables")
 
 func main() {
 	flag.Parse()
@@ -26,21 +26,18 @@ func main() {
 	}
 	var module *tfconfig.Module
 
-	if *ibmModule || *metadataJsonFile != "" {
-		if *ibmModule && *metadataJsonFile != "" {
-			var err tfconfig.Diagnostics
-			module, err = tfconfig.LoadIBMModule(dir, *metadataJsonFile)
-			if err != nil {
-				err = append(err, tfconfig.Diagnostic{
-					Severity: tfconfig.DiagError,
-					Summary:  "loadErr",
-					Detail:   fmt.Sprintf("%s", err),
-				})
-				log.Fatal(err)
-			}
-		} else {
-			log.Fatal(" Either of --ibm or --metadata arguments is missing")
+	if *metadataJsonFile != "" {
+		var err tfconfig.Diagnostics
+		module, err = tfconfig.LoadIBMModule(dir, *metadataJsonFile)
+		if err != nil {
+			err = append(err, tfconfig.Diagnostic{
+				Severity: tfconfig.DiagError,
+				Summary:  "loadErr",
+				Detail:   fmt.Sprintf("%s", err),
+			})
+			log.Fatal(err)
 		}
+
 	} else {
 		module, _ = tfconfig.LoadModule(dir)
 	}
