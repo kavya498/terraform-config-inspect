@@ -109,6 +109,7 @@ Provider Requirements:
 
 `
 
+// Add outputs in future
 const markdownVariableTemplate = `
 # Module {{ tt .Path }}
 
