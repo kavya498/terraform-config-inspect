@@ -6,6 +6,9 @@ of the information Terraform itself would process, and in return it's able
 to be broadly compatible with modules written for many different versions of
 Terraform.
 
+## NOTE: This tool is enhanced to generate provider metadata for given IBM-Cloud resource/datasources/module variables in a template.
+Kindly, visit [template metadata extractor](./metadata_extrator.md) for more details
+
 ```
 $ go get github.com/hashicorp/terraform-config-inspect
 ```
