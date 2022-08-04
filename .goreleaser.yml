@@ -1,0 +1,39 @@
+# Visit https://goreleaser.com for documentation on how to customize this
+# behavior.
+builds:
+- env:
+    # goreleaser does not work with CGO, it could also complicate
+    # usage by users in CI/CD systems like Terraform Cloud where
+    # they are unable to install libraries.
+    - CGO_ENABLED=0
+  mod_timestamp: '{{ .CommitTimestamp }}'
+  flags:
+    - -trimpath
+  ldflags:
+    - '-s -w -X main.version={{.Version}} -X main.commit={{.Commit}}'
+  goos:
+    - windows
+    - linux
+    - darwin
+  goarch:
+    - amd64
+    - arm64
+    - arm
+  ignore:
+    - goarch: '386'
+      goos: darwin
+    - goarch: 'arm'
+      goos: darwin
+    - goarch: 'arm64'
+      goos: windows
+    - goarch: 'arm'
+      goos: windows
+  binary: '{{ .ProjectName }}'
+archives:
+- format: zip
+  name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+release:
+  # If you want to manually examine the release before its live, uncomment this line:
+  draft: false
+changelog:
+  skip: true
