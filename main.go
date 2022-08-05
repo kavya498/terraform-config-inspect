@@ -13,7 +13,7 @@ import (
 var showJSON = flag.Bool("json", false, "produce JSON-formatted output")
 
 var metadataJsonFile = flag.String("metadata", "", "Provider metadata json file path")
-var showVariables = flag.Bool("variables", false, "produce JSON-formatted output for variables")
+var showVariables = flag.Bool("filter-variables", false, "produce JSON-formatted output for variables")
 
 // This function expects users to pass template path else it takes current path ./
 func main() {
