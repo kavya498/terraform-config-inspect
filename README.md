@@ -200,6 +200,7 @@ The primary way to use this `terraform-config-inspect` CLI tool is as follows:
   ```
 
 Use the  `--metadata` flag to specify the location of the IBM Cloud provider metadata json file.
+#### NOTE: If you have any module reference in your input template, Run terraform init on your template before using this CLI
 
 ### Usage 4: Output variable metadata
 
