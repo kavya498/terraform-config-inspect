@@ -112,7 +112,7 @@ The primary way to use this `terraform-config-inspect` CLI tool is as follows:
 ### Usage 2: Print JSON output in console
 
   ```sh
-  $ terraform-config-inspect --json path/to/module
+  $ terraform-config-inspect path/to/module --json
   ```
 
   <details>
@@ -196,27 +196,27 @@ The primary way to use this `terraform-config-inspect` CLI tool is as follows:
 ### Usage 3: Annotate with provider metadata 
 
   ```sh
-  $ terraform-config-inspect --json path/to/module --metadata path/to/provider-metadata-file
+  $ terraform-config-inspect path/to/module --json --metadata path/to/provider-metadata-file
   ```
 
 Use the  `--metadata` flag to specify the location of the IBM Cloud provider metadata json file.
 
-### Usage 4: Output variable metadata file
+### Usage 4: Output variable metadata
 
   ```sh
-  $ terraform-config-inspect --json path/to/module --variables path/to/output-variable-metadata-file
+  $ terraform-config-inspect path/to/module --json --filter-variables 
   ```
 
-Use the `--variables` flag specify the location for the output variables metadata file
+Use the `--filter-variables` flag include variables in the output metadata file
 
 * This tool doesn't extract provider metadata of other cloud providers like AWS, Azure, GCP etc. while it doesn't fail when these providers are used. It gives high level template metadata as usual for non IBM-Cloud providers.
 
 ```sh
-$ terraform-config-inspect --json path/to/module --variables path/to/module --metadata path/to/provider-metadata-file
+$ terraform-config-inspect --json path/to/module --metadata path/to/provider-metadata-file --filter-variables
 ```
 
   <details>
-  <summary>Variable Metadata JSON output</summary>
+  <summary>Output variable metadata in JSON format</summary>
 
     ```json
     {
