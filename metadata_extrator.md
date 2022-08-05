@@ -35,6 +35,8 @@ Two additional flags are been added additionally to the Hashicorp's terraform-co
 * If you need details of all other blocks ignore `--variables` flag.
 * This tool doesn't extract provider metadata of other cloud providers like AWS, Azure, GCP etc. while it doesn't fail when these providers are used. It gives high level template metadata as usual for non IBM-Cloud providers.
 
+### NOTE: If you have any module reference in your input template, Run terraform init on your template before using this CLI
+
 
 ## Usage with metadata flag
 

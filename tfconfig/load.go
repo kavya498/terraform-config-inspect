@@ -79,7 +79,7 @@ func findModuleMetadata(dir, metadataPath string, modules map[string]*ModuleCall
 		err = append(err, Diagnostic{
 			Severity: DiagError,
 			Summary:  "moduleDirErr",
-			Detail:   fmt.Sprintf("Failed to read init module directory of %s", dir+"/.terraform/modules/"),
+			Detail:   fmt.Sprintf("Failed to read init module directory of %s. Please run terraform init if it is not run earlier to load the modules.", dir+"/.terraform/modules/"),
 		})
 	}
 	fileStruct := make(map[string]interface{})
