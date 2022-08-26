@@ -107,6 +107,14 @@ func findModuleMetadata(dir, metadataPath string, modules map[string]*ModuleCall
 					Detail:   fmt.Sprintf("Error while loading child modules %s", LoadIBMModuleErr),
 				})
 			}
+
+			if loadedModulePath.ManagedResources != nil {
+				module.ManagedResources = loadedModulePath.ManagedResources
+			}
+
+			if loadedModulePath.DataResources != nil {
+				module.DataResources = loadedModulePath.DataResources
+			}
 			// For attributes of modules if variable assigned to the attribute matches any of the Variables struct
 			// and if moduleAttribute is present in inner module's variable reference,
 			// assign all inner module's variable metadata to  modulevariable.
