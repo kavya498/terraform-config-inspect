@@ -189,9 +189,10 @@ func LoadModuleFromFile(file *hcl.File, mod *Module) hcl.Diagnostics {
 			diags = append(diags, contentDiags...)
 
 			name := block.Labels[0]
+			pos := sourcePosHCL(block.DefRange)
 			o := &Output{
 				Name: name,
-				Pos:  sourcePosHCL(block.DefRange),
+				Pos:  &pos,
 			}
 
 			mod.Outputs[name] = o

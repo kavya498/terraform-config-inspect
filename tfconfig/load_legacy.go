@@ -142,12 +142,12 @@ func loadModuleLegacyHCL(fs FS, dir string) (*Module, Diagnostics) {
 				if err != nil {
 					return nil, diagnosticsErrorf("invalid output block at %s: %s", item.Pos(), err)
 				}
-
+				pos := sourcePosLegacyHCL(item.Pos(), filename)
 				o := &Output{
 					Name:        name,
 					Description: block.Description,
 					Sensitive:   block.Sensitive,
-					Pos:         sourcePosLegacyHCL(item.Pos(), filename),
+					Pos:         &pos,
 				}
 				if _, exists := mod.Outputs[name]; exists {
 					return nil, diagnosticsErrorf("duplicate output block for %q", name)

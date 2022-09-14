@@ -64,6 +64,9 @@ func LoadIBMModule(dir string, metadataPath string) (*Module, Diagnostics) {
 			})
 		}
 	}
+	// if loadModule.Outputs != nil {
+	// 	findOutputMetadata(loadModule.Outputs, metadata)
+	// }
 	return loadModule, err
 }
 
@@ -114,6 +117,9 @@ func findModuleMetadata(dir, metadataPath string, modules map[string]*ModuleCall
 
 			if loadedModulePath.DataResources != nil {
 				module.DataResources = loadedModulePath.DataResources
+			}
+			if loadedModulePath.Outputs != nil {
+				module.Outputs = loadedModulePath.Outputs
 			}
 			// For attributes of modules if variable assigned to the attribute matches any of the Variables struct
 			// and if moduleAttribute is present in inner module's variable reference,
@@ -169,6 +175,11 @@ func findModuleMetadata(dir, metadataPath string, modules map[string]*ModuleCall
 // This checks if a variable reference is present in any of resource attributes.
 // If found, it maps variable to resource/datasource, forms source and extracts provider metadata for that attribute using provider metadata json.
 
+// func findOutputMetadata(outputs map[string]*Output, metadata map[string]interface{}) {
+// 	for _, _ := range outputs {
+// 		// output.
+// 	}
+// }
 func findMetadata(moduleType string, resources map[string]*Resource, variables map[string]*Variable, metadata map[string]interface{}) {
 	for _, resource := range resources {
 		for resourceAttribute, resourceVariable := range resource.Attributes {

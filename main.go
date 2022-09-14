@@ -70,6 +70,18 @@ func showModuleJSON(module *tfconfig.Module, variable bool) {
 			variables[k] = v
 		}
 		metadataJson.Variables = variables
+		outputs := module.Outputs
+		for k, v := range outputs {
+			if v.Source != nil {
+				v.Source = nil
+			}
+			// pos := tfconfig.SourcePos{}
+			if v.Pos != nil {
+				v.Pos = nil
+			}
+			outputs[k] = v
+		}
+		metadataJson.Outputs = outputs
 		j, err := json.MarshalIndent(metadataJson, "", "  ")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error producing JSON: %s\n", err)

@@ -9,6 +9,7 @@ type ModuleCall struct {
 	Attributes       map[string]interface{} `json:"attributes,omitempty"`
 	ManagedResources map[string]*Resource   `json:"managed_resources"`
 	DataResources    map[string]*Resource   `json:"data_resources"`
+	Outputs          map[string]*Output     `json:"outputs,omitempty"`
 
 	Pos SourcePos `json:"pos"`
 }

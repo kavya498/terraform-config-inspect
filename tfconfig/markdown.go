@@ -121,4 +121,10 @@ const markdownVariableTemplate = `
 {{- if .Description}}: {{ .Description }}{{ end }}
 {{- end}}{{end}}
 
+{{- if .Outputs}}
+
+## Output Values
+{{- range .Outputs }}
+* {{ tt .Name }}{{ if .Description}}: {{ .Description }}{{ end }}
+{{- end}}{{end}}
 `
