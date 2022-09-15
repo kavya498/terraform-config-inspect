@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"path/filepath"
 	"strings"
 
@@ -17,7 +18,47 @@ func LoadModule(dir string) (*Module, Diagnostics) {
 }
 
 // LoadIBMModule takes template file directory and metadataPath as input and returns final module struct.
-func LoadIBMModule(dir string, metadataPath string) (*Module, Diagnostics) {
+func CheckForInitDirectoryAndLoadIBMModule(dir string, metadataPath string) (*Module, Diagnostics) {
+	var err Diagnostics
+	fileStruct := make(map[string]interface{})
+	// Check for init directory ./terraform and return error if it is not present
+	_, initDirErr := ioutil.ReadDir(dir + "/.terraform/")
+	if initDirErr != nil {
+		err = append(err, Diagnostic{
+			Severity: DiagError,
+			Summary:  "initDirErr",
+			Detail:   fmt.Sprintf("Failed to read init module directory of %s. Please run terraform init if it is not run earlier to load the modules.", dir+"/.terraform/"),
+		})
+		return nil, err
+	}
+
+	// Check for modules directory ./terraform/modules and will not return error assuming that no modules are present.
+	// Store directories inside the modules folders as file struct.
+	moduleFilesInfo, moduleDirErr := ioutil.ReadDir(dir + "/.terraform/modules/")
+	if moduleDirErr == nil {
+		for _, f := range moduleFilesInfo {
+			if f.IsDir() {
+				fileStruct[f.Name()] = struct{}{}
+			}
+		}
+	} else {
+		log.Printf("No modules downloaded for %s", dir)
+	}
+	// LoadIBMModule to extract metadata
+	loadedModule, loadedModuleErr := LoadIBMModule(dir, metadataPath, fileStruct)
+	if loadedModuleErr != nil {
+		err = append(err, Diagnostic{
+			Severity: DiagError,
+			Summary:  "loadedModuleErr",
+			Detail:   fmt.Sprintf("Failed to LoadIBMModule for %s", loadedModuleErr),
+		})
+		return nil, err
+	}
+	return loadedModule, nil
+}
+
+// LoadIBMModule takes template file directory and metadataPath as input and returns final module struct.
+func LoadIBMModule(dir string, metadataPath string, fileStruct map[string]interface{}) (*Module, Diagnostics) {
 	var metadata map[string]interface{}
 	var err Diagnostics
 	loadModule, LoadModuleFromFilesystemErr := LoadModuleFromFilesystem(NewOsFs(), dir)
@@ -55,7 +96,7 @@ func LoadIBMModule(dir string, metadataPath string) (*Module, Diagnostics) {
 		findMetadata("resource", loadModule.ManagedResources, loadModule.Variables, metadata)
 	}
 	if loadModule.ModuleCalls != nil && len(loadModule.ModuleCalls) != 0 {
-		loadModuleErr := findModuleMetadata(dir, metadataPath, loadModule.ModuleCalls, loadModule.Variables, metadata)
+		loadModuleErr := findModuleMetadata(dir, metadataPath, fileStruct, loadModule.ModuleCalls, loadModule.Variables, metadata)
 		if loadModuleErr != nil {
 			err = append(err, Diagnostic{
 				Severity: DiagError,
@@ -70,39 +111,94 @@ func LoadIBMModule(dir string, metadataPath string) (*Module, Diagnostics) {
 	return loadModule, err
 }
 
+// findSubModuleSourcePath finds subfolder in a given source for all below scenarios
+/*
+
+	./consul
+	"hashicorp/consul/aws"
+	"app.terraform.io/example-corp/k8s-cluster/azurerm" - other registries
+	"github.com/hashicorp/example"
+	"git@github.com:hashicorp/example.git"
+	"bitbucket.org/hashicorp/terraform-consul-aws"
+	"git::https://example.com/vpc.git"
+	"git::ssh://username@example.com/storage.git"
+	"git::https://example.com/vpc.git?ref=v1.2.0"
+	"git::https://example.com/storage.git?ref=51d462976d84fdea54b47d80dcabbf680badcdb8"
+	"git::username@example.com:storage.git"
+	"hg::http://example.com/vpc.hg"
+	"hg::http://example.com/vpc.hg?ref=v1.2.0"
+	"https://example.com/vpc-module.zip"
+	"https://example.com/vpc-module?archive=zip"
+	"s3::https://s3-eu-west-1.amazonaws.com/examplecorp-terraform-modules/vpc.zip"
+	"gcs::https://www.googleapis.com/storage/v1/modules/foomodule.zip"
+	with subfolder:
+	hashicorp/consul/aws//modules/consul-cluster
+	git::https://example.com/network.git//modules/vpc
+	https://example.com/network-module.zip//modules/vpc
+	s3::https://s3-eu-west-1.amazonaws.com/examplecorp-terraform-modules/network.zip//modules/vpc
+*/
+
+func findSubModuleSourcePath(source string) string {
+	if strings.Contains(source, "?ref=") {
+		source = strings.Split(source, "?ref=")[0]
+	}
+	if strings.Contains(source, "?archive=") {
+		source = strings.Split(source, "?archive=")[0]
+	}
+	if strings.Contains(source, "https://") {
+		source = strings.Split(source, "https://")[1]
+	}
+	if strings.Contains(source, "ssh://") {
+		source = strings.Split(source, "ssh://")[1]
+	}
+	if strings.Contains(source, "http://") {
+		source = strings.Split(source, "http://")[1]
+	}
+	if strings.Contains(source, "//") {
+		subfolderPath := strings.Split(source, "//")
+		return subfolderPath[1]
+	}
+	return ""
+}
+
 //findModuleMetadata:
 // dir -->template file directory and metadataPath
 // modules --> modules details from Module struct, variables --> variables from module struct and metadata json as inputs
 // This function first checks for downloaded modules of terraform init under /.terraform/modules/  directory
 // If the module name from modules struct matches any of the downloaded module, repeat the extraction LoadIBMModule
-func findModuleMetadata(dir, metadataPath string, modules map[string]*ModuleCall, variables map[string]*Variable, metadata map[string]interface{}) Diagnostics {
+func findModuleMetadata(dir, metadataPath string, fileStruct map[string]interface{}, modules map[string]*ModuleCall, variables map[string]*Variable, metadata map[string]interface{}) Diagnostics {
 	var err Diagnostics
-	fileInfo, moduleDirErr := ioutil.ReadDir(dir + "/.terraform/modules/")
-	if moduleDirErr != nil {
-		err = append(err, Diagnostic{
-			Severity: DiagError,
-			Summary:  "moduleDirErr",
-			Detail:   fmt.Sprintf("Failed to read init module directory of %s. Please run terraform init if it is not run earlier to load the modules.", dir+"/.terraform/modules/"),
-		})
-	}
-	fileStruct := make(map[string]interface{})
-	for _, f := range fileInfo {
-		if f.IsDir() {
-			fileStruct[f.Name()] = struct{}{}
-		}
+	parentModuleName := ""
+	if strings.Contains(dir, "/.terraform/modules/") {
+		parentModuleName = fmt.Sprintf("%s.", strings.Split(dir, "/.terraform/modules/")[1])
 	}
 	for _, module := range modules {
 		if module.Attributes != nil {
-			modulePath := dir + "/" + module.Source
-			if _, ok := fileStruct[module.Name]; ok {
-				modulePath = dir + "/.terraform/modules/" + module.Name
-				modulePathSplit := strings.Split(module.Source, "//")
-				if len(modulePathSplit) > 1 {
-					modulePath = modulePath + "/" + modulePathSplit[1]
+			var modulePath string
+			if strings.HasPrefix(module.Source, "/") || strings.HasPrefix(module.Source, "./") || strings.HasPrefix(module.Source, "../") {
+				modulePath = dir + "/" + module.Source
+			} else if _, ok := fileStruct[parentModuleName+module.Name]; ok {
+				if strings.Contains(dir, "/.terraform/modules/") {
+					rootDir := strings.Split(dir, "/.terraform/modules/")[0]
+					modulePath = rootDir + "/.terraform/modules/" + parentModuleName + module.Name
+				} else {
+					modulePath = dir + "/.terraform/modules/" + parentModuleName + module.Name
 				}
+
+				subModuleDirectorySource := findSubModuleSourcePath(module.Source)
+				if subModuleDirectorySource != "" {
+					modulePath = modulePath + "/" + subModuleDirectorySource
+				}
+			} else {
+				err = append(err, Diagnostic{
+					Severity: DiagError,
+					Summary:  "module path error",
+					Detail:   fmt.Sprintf("module source %s is either incorrect or not supported by this tool", module.Source),
+				})
 			}
+			log.Printf("Loading module '%s' from the path '%s'", module.Name, modulePath)
 			// Load inner module
-			loadedModulePath, LoadIBMModuleErr := LoadIBMModule(modulePath, metadataPath)
+			loadedModulePath, LoadIBMModuleErr := LoadIBMModule(modulePath, metadataPath, fileStruct)
 			if LoadIBMModuleErr != nil {
 				err = append(err, Diagnostic{
 					Severity: DiagError,

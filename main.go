@@ -30,7 +30,7 @@ func main() {
 	var module *tfconfig.Module
 	if *metadataJsonFile != "" {
 		var err tfconfig.Diagnostics
-		module, err = tfconfig.LoadIBMModule(dir, *metadataJsonFile)
+		module, err = tfconfig.CheckForInitDirectoryAndLoadIBMModule(dir, *metadataJsonFile)
 		if err != nil {
 			err = append(err, tfconfig.Diagnostic{
 				Severity: tfconfig.DiagError,
