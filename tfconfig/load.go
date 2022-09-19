@@ -27,7 +27,7 @@ func CheckForInitDirectoryAndLoadIBMModule(dir string, metadataPath string) (*Mo
 		err = append(err, Diagnostic{
 			Severity: DiagError,
 			Summary:  "initDirErr",
-			Detail:   fmt.Sprintf("Failed to read init module directory of %s. Please run terraform init if it is not run earlier to load the modules.", dir+"/.terraform/"),
+			Detail:   fmt.Sprintf("Failed to read init module directory of %s. Please run terraform init if it is not run earlier to load the modules: %s", dir+"/.terraform/", initDirErr),
 		})
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func findSubModuleSourcePath(source string) string {
 func findModuleMetadata(dir, metadataPath string, fileStruct map[string]interface{}, modules map[string]*ModuleCall, variables map[string]*Variable, metadata map[string]interface{}) Diagnostics {
 	var err Diagnostics
 	parentModuleName := ""
-	if strings.Contains(dir, "/.terraform/modules/") {
+	if strings.Contains(dir, "/.terraform/modules/") && len(strings.Split(dir, "/.terraform/modules/")) > 1 {
 		parentModuleName = fmt.Sprintf("%s.", strings.Split(dir, "/.terraform/modules/")[1])
 	}
 	for _, module := range modules {
@@ -178,6 +178,7 @@ func findModuleMetadata(dir, metadataPath string, fileStruct map[string]interfac
 			if strings.HasPrefix(module.Source, "/") || strings.HasPrefix(module.Source, "./") || strings.HasPrefix(module.Source, "../") {
 				modulePath = dir + "/" + module.Source
 			} else if _, ok := fileStruct[parentModuleName+module.Name]; ok {
+				// removing parent folder for child modules as child modules download under parent.child folder
 				if strings.Contains(dir, "/.terraform/modules/") {
 					rootDir := strings.Split(dir, "/.terraform/modules/")[0]
 					modulePath = rootDir + "/.terraform/modules/" + parentModuleName + module.Name
@@ -195,6 +196,7 @@ func findModuleMetadata(dir, metadataPath string, fileStruct map[string]interfac
 					Summary:  "module path error",
 					Detail:   fmt.Sprintf("module source %s is either incorrect or not supported by this tool", module.Source),
 				})
+				return err
 			}
 			log.Printf("Loading module '%s' from the path '%s'", module.Name, modulePath)
 			// Load inner module
@@ -205,6 +207,7 @@ func findModuleMetadata(dir, metadataPath string, fileStruct map[string]interfac
 					Summary:  "LoadIBMModuleErr",
 					Detail:   fmt.Sprintf("Error while loading child modules %s", LoadIBMModuleErr),
 				})
+				return err
 			}
 
 			if loadedModulePath.ManagedResources != nil {
