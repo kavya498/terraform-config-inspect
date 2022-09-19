@@ -3,6 +3,7 @@
 ENHANCEMENTS
 
 * Extract template output details
+* Add resources and datasources details in module_calls
 
 BUG FIXES
 
