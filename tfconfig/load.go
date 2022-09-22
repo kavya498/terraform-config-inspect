@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
@@ -227,7 +228,6 @@ func findModuleMetadata(dir, metadataPath string, fileStruct map[string]interfac
 				if modulevariable, ok := variables[moduleVariableValue.(string)]; ok {
 					source := "module." + module.Name
 					if v, ok := loadedModulePath.Variables[moduleAttribute]; ok && len(v.Source) > 0 {
-						source = source + "." + v.Source[len(v.Source)-1]
 						modulevariable.Aliases = v.Aliases
 						modulevariable.AllowedValues = v.AllowedValues
 						modulevariable.CloudDataRange = v.CloudDataRange
@@ -258,8 +258,13 @@ func findModuleMetadata(dir, metadataPath string, fileStruct map[string]interfac
 						if modulevariable.Sensitive == nil {
 							modulevariable.Sensitive = v.Sensitive
 						}
+						for _, s := range v.Source {
+							modulevariable.Source = append(modulevariable.Source, source+"."+s)
+						}
+					} else {
+						modulevariable.Source = append(modulevariable.Source, source)
 					}
-					modulevariable.Source = append(modulevariable.Source, source)
+					sort.Strings(modulevariable.Source)
 				}
 			}
 		}
@@ -296,6 +301,7 @@ func findMetadata(moduleType string, resources map[string]*Resource, variables m
 					}
 				}
 				v.Source = append(v.Source, source)
+				sort.Strings(v.Source)
 
 			}
 		}
