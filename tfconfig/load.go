@@ -228,30 +228,67 @@ func findModuleMetadata(dir, metadataPath string, fileStruct map[string]interfac
 				if modulevariable, ok := variables[moduleVariableValue.(string)]; ok {
 					source := "module." + module.Name
 					if v, ok := loadedModulePath.Variables[moduleAttribute]; ok && len(v.Source) > 0 {
-						modulevariable.Aliases = v.Aliases
-						modulevariable.AllowedValues = v.AllowedValues
-						modulevariable.CloudDataRange = v.CloudDataRange
-						modulevariable.CloudDataType = v.CloudDataType
-						modulevariable.Computed = v.Computed
+
+						if modulevariable.Aliases == nil {
+							modulevariable.Aliases = v.Aliases
+						}
+						if modulevariable.AllowedValues == "" {
+							modulevariable.AllowedValues = v.AllowedValues
+						}
+						if len(modulevariable.CloudDataRange) == 0 {
+							modulevariable.CloudDataRange = v.CloudDataRange
+						}
+						if modulevariable.CloudDataType == "" {
+							modulevariable.CloudDataType = v.CloudDataType
+						}
+						if modulevariable.Computed == nil {
+							modulevariable.Computed = v.Computed
+						}
 						if modulevariable.Default == nil {
 							modulevariable.Default = v.Default
 						}
-						modulevariable.Deprecated = v.Deprecated
+						if modulevariable.Deprecated == "" {
+							modulevariable.Deprecated = v.Deprecated
+						}
 						if modulevariable.Description == "" {
 							modulevariable.Description = v.Description
 						}
-						modulevariable.Elem = v.Elem
-						modulevariable.Hidden = v.Hidden
-						modulevariable.Immutable = v.Immutable
-						modulevariable.LinkStatus = v.LinkStatus
-						modulevariable.Matches = v.Matches
-						modulevariable.MaxItems = v.MaxItems
-						modulevariable.MaxValue = v.MaxValue
-						modulevariable.MaxValueLength = v.MaxValueLength
-						modulevariable.MinItems = v.MinItems
-						modulevariable.MinValue = v.MinValue
-						modulevariable.MinValueLength = v.MinValueLength
-						modulevariable.Optional = v.Optional
+						if modulevariable.Elem == nil {
+							modulevariable.Elem = v.Elem
+						}
+						if modulevariable.Hidden == nil {
+							modulevariable.Hidden = v.Hidden
+						}
+						if modulevariable.Immutable == nil {
+							modulevariable.Immutable = v.Immutable
+						}
+						if modulevariable.LinkStatus == "" {
+							modulevariable.LinkStatus = v.LinkStatus
+						}
+						if modulevariable.MaxItems == nil {
+							modulevariable.MaxItems = v.MaxItems
+						}
+						if modulevariable.MaxValue == "" {
+							modulevariable.MaxValue = v.MaxValue
+						}
+						if modulevariable.MaxValueLength == nil {
+							modulevariable.MaxValueLength = v.MaxValueLength
+						}
+						if modulevariable.MinValueLength == nil {
+							modulevariable.MinValueLength = v.MinValueLength
+						}
+						if modulevariable.Matches == "" {
+							modulevariable.Matches = v.Matches
+						}
+						if modulevariable.MinItems == nil {
+							modulevariable.MinItems = v.MinItems
+						}
+						if modulevariable.MinValue == "" {
+							modulevariable.MinValue = v.MinValue
+						}
+						if modulevariable.Optional == nil {
+							modulevariable.Optional = v.Optional
+						}
 						if modulevariable.Required == nil {
 							modulevariable.Required = v.Required
 						}
@@ -321,17 +358,18 @@ func ExtractMetadata(v *Variable, m interface{}, moduleName, moduleAttribute str
 		for _, argument := range ma.([]interface{}) {
 			arg := argument.(map[string]interface{})
 			if arg["name"] == moduleAttribute {
-				if a, ok := arg["aliases"]; ok {
+				if a, ok := arg["aliases"]; ok && v.Aliases == nil {
 					v.Aliases = a.([]string)
 				}
-				if a, ok := arg["options"]; ok {
+				if a, ok := arg["options"]; ok && v.AllowedValues == "" {
 					v.AllowedValues = a.(string)
 				}
-				if a, ok := arg["cloud_data_type"]; ok {
+				if a, ok := arg["cloud_data_type"]; ok && v.CloudDataType == "" {
 					v.CloudDataType = a.(string)
 				}
-				if a, ok := arg["computed"]; ok {
-					v.Computed = a.(bool)
+				if a, ok := arg["computed"]; ok && v.Computed == nil {
+					computed := a.(bool)
+					v.Computed = &computed
 				}
 				if a, ok := arg["default"]; ok && v.Default == nil {
 					v.Default = a
@@ -339,55 +377,58 @@ func ExtractMetadata(v *Variable, m interface{}, moduleName, moduleAttribute str
 				if a, ok := arg["description"]; ok && v.Description == "" {
 					v.Description = a.(string)
 				}
-				if a, ok := arg["elem"]; ok {
+				if a, ok := arg["elem"]; ok && v.Elem == nil {
 					v.Elem = a
 				}
-				if a, ok := arg["hidden"]; ok {
-					v.Hidden = a.(bool)
+				if a, ok := arg["hidden"]; ok && v.Hidden == nil {
+					hidden := a.(bool)
+					v.Hidden = &hidden
 				}
-				if a, ok := arg["immutable"]; ok {
-					v.Immutable = a.(bool)
+				if a, ok := arg["immutable"]; ok && v.Immutable == nil {
+					immutable := a.(bool)
+					v.Immutable = &immutable
 				}
-				if a, ok := arg["link_status"]; ok {
+				if a, ok := arg["link_status"]; ok && v.LinkStatus == "" {
 					v.LinkStatus = a.(string)
 				}
-				if a, ok := arg["matches"]; ok {
+				if a, ok := arg["matches"]; ok && v.Matches == "" {
 					v.Matches = a.(string)
 				}
-				if a, ok := arg["max_items"]; ok {
-					v.MaxItems = a.(int)
+				if a, ok := arg["max_items"]; ok && v.MaxItems == nil {
+					maxItems := a.(int)
+					v.MaxItems = &maxItems
 				}
-				if a, ok := arg["max_value"]; ok {
+				if a, ok := arg["max_value"]; ok && v.MaxValue == "" {
 					v.MaxValue = a.(string)
 				}
-				if a, ok := arg["min_items"]; ok {
-					v.MinItems = a.(int)
+				if a, ok := arg["min_items"]; ok && v.MinItems == nil {
+					minItems := a.(int)
+					v.MinItems = &minItems
 				}
-				if a, ok := arg["min_value"]; ok {
+				if a, ok := arg["min_value"]; ok && v.MinValue == "" {
 					v.MinValue = a.(string)
 				}
-				if a, ok := arg["min_length"]; ok {
+				if a, ok := arg["min_length"]; ok && v.MinValueLength == nil {
 					v.MinValueLength = a
 				}
-				if a, ok := arg["max_length"]; ok {
+				if a, ok := arg["max_length"]; ok && v.MaxValueLength == nil {
 					v.MaxValueLength = a
 				}
 				if a, ok := arg["required"]; ok && v.Required == nil {
 					required := a.(bool)
 					v.Required = &required
-
 				}
-				if a, ok := arg["optional"]; ok {
+				if a, ok := arg["optional"]; ok && v.Optional == nil {
 					optional := a.(bool)
 					v.Optional = &optional
 				}
 				if a, ok := arg["secure"]; ok && v.Sensitive == nil {
 					v.Sensitive = a.(*bool)
 				}
-				if a, ok := arg["deprecated"]; ok {
+				if a, ok := arg["deprecated"]; ok && v.Deprecated == "" {
 					v.Deprecated = a.(string)
 				}
-				if a, ok := arg["cloud_data_range"]; ok {
+				if a, ok := arg["cloud_data_range"]; ok && len(v.CloudDataRange) == 0 {
 					v.CloudDataRange = a.([]interface{})
 				}
 			}

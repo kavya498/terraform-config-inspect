@@ -18,8 +18,8 @@ type Variable struct {
 	Aliases        []string    `json:"aliases,omitempty" description:"The list of aliases for the variable name"`
 	CloudDataType  string      `json:"cloud_data_type,omitempty" description:"Cloud data type of the variable. eg. resource_group_id, region, vpc_id."`
 	LinkStatus     string      `json:"link_status,omitempty" description:"The status of the link"`
-	Immutable      bool        `json:"immutable,omitempty" description:"Is the variable readonly"`
-	Hidden         bool        `json:"hidden,omitempty" description:"If **true**, the variable is not displayed on UI or Command line."`
+	Immutable      *bool       `json:"immutable,omitempty" description:"Is the variable readonly"`
+	Hidden         *bool       `json:"hidden,omitempty" description:"If **true**, the variable is not displayed on UI or Command line."`
 	AllowedValues  string      `json:"options,omitempty" description:"The Comma separated list of possible values for this variable.If type is **integer** or **date**, then the array of string is converted to array of integers or date during the runtime."`
 	MinValue       string      `json:"min_value,omitempty" description:"The minimum value of the variable"`
 	MaxValue       string      `json:"max_value,omitempty" description:"The maximum value of the variable"`
@@ -29,10 +29,10 @@ type Variable struct {
 
 	//Values that are not present in schematics Variable Metadata
 	Optional       *bool         `json:"optional,omitempty" description:""`
-	Computed       bool          `json:"computed,omitempty" description:""`
+	Computed       *bool         `json:"computed,omitempty" description:""`
 	Elem           interface{}   `json:"elem,omitempty" description:""`
-	MaxItems       int           `json:"max_items,omitempty" description:""`
-	MinItems       int           `json:"min_items,omitempty" description:""`
+	MaxItems       *int          `json:"max_items,omitempty" description:""`
+	MinItems       *int          `json:"min_items,omitempty" description:""`
 	Deprecated     string        `json:"deprecated,omitempty" description:""`
 	CloudDataRange []interface{} `json:"cloud_data_range,omitempty" description:""`
 }
