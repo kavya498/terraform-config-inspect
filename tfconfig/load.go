@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -112,6 +113,19 @@ func LoadIBMModule(dir string, metadataPath string, fileStruct map[string]interf
 	return loadModule, err
 }
 
+// SortedKeysOfMap
+// when there is a range on map, keys are always picked in random.
+// This function sorts keys of map and returns sorted list of keys
+func SortedKeysOfMap(mapper interface{}) []string {
+	keyValueMap := reflect.ValueOf(mapper).MapKeys()
+	keyList := make([]string, len(keyValueMap))
+	for k, v := range keyValueMap {
+		keyList[k] = v.Interface().(string)
+	}
+	sort.Strings(keyList)
+	return keyList
+}
+
 // findSubModuleSourcePath finds subfolder in a given source for all below scenarios
 /*
 
@@ -173,7 +187,10 @@ func findModuleMetadata(dir, metadataPath string, fileStruct map[string]interfac
 	if strings.Contains(dir, "/.terraform/modules/") && len(strings.Split(dir, "/.terraform/modules/")) > 1 {
 		parentModuleName = fmt.Sprintf("%s.", strings.Split(dir, "/.terraform/modules/")[1])
 	}
-	for _, module := range modules {
+	// since range on map picks keys in random order,
+	// we sort keys using SortedKeysOfMap and range on the the keys
+	for _, mod := range SortedKeysOfMap(modules) {
+		module := modules[mod]
 		if module.Attributes != nil {
 			var modulePath string
 			if strings.HasPrefix(module.Source, "/") || strings.HasPrefix(module.Source, "./") || strings.HasPrefix(module.Source, "../") {
@@ -199,7 +216,7 @@ func findModuleMetadata(dir, metadataPath string, fileStruct map[string]interfac
 				})
 				return err
 			}
-			log.Printf("Loading module '%s' from the path '%s'", module.Name, modulePath)
+			log.Printf("[INFO] Loading module '%s' from the path '%s'", module.Name, modulePath)
 			// Load inner module
 			loadedModulePath, LoadIBMModuleErr := LoadIBMModule(modulePath, metadataPath, fileStruct)
 			if LoadIBMModuleErr != nil {
@@ -227,7 +244,7 @@ func findModuleMetadata(dir, metadataPath string, fileStruct map[string]interfac
 			for moduleAttribute, moduleVariableValue := range module.Attributes {
 				if modulevariable, ok := variables[moduleVariableValue.(string)]; ok {
 					source := "module." + module.Name
-					if v, ok := loadedModulePath.Variables[moduleAttribute]; ok && len(v.Source) > 0 {
+					if v, ok := loadedModulePath.Variables[moduleAttribute]; ok && len(v.Source) > 0 && (modulevariable.Type == "string" || modulevariable.Type == "number" || modulevariable.Type == "bool" || modulevariable.Type == "list(string)" || modulevariable.Type == "set(string)" || modulevariable.Type == "map") {
 
 						if modulevariable.Aliases == nil {
 							modulevariable.Aliases = v.Aliases
@@ -322,7 +339,10 @@ func findModuleMetadata(dir, metadataPath string, fileStruct map[string]interfac
 // 	}
 // }
 func findMetadata(moduleType string, resources map[string]*Resource, variables map[string]*Variable, metadata map[string]interface{}) {
-	for _, resource := range resources {
+	// since range on map picks keys in random order,
+	// we sort keys using SortedKeysOfMap and range on the the keys
+	for _, v := range SortedKeysOfMap(resources) {
+		resource := resources[v]
 		for resourceAttribute, resourceVariable := range resource.Attributes {
 			if v, ok := variables[resourceVariable.(string)]; ok {
 				source := resource.Type + "." + resource.Name + "." + resourceAttribute
@@ -357,7 +377,8 @@ func ExtractMetadata(v *Variable, m interface{}, moduleName, moduleAttribute str
 	if ma, ok := m.(map[string]interface{})[moduleName]; ok {
 		for _, argument := range ma.([]interface{}) {
 			arg := argument.(map[string]interface{})
-			if arg["name"] == moduleAttribute {
+			if arg["name"] == moduleAttribute && (v.Type == "string" || v.Type == "number" || v.Type == "bool" || v.Type == "list(string)" || v.Type == "set(string)" || v.Type == "map") {
+
 				if a, ok := arg["aliases"]; ok && v.Aliases == nil {
 					v.Aliases = a.([]string)
 				}
@@ -418,7 +439,7 @@ func ExtractMetadata(v *Variable, m interface{}, moduleName, moduleAttribute str
 					required := a.(bool)
 					v.Required = &required
 				}
-				if a, ok := arg["optional"]; ok && v.Optional == nil {
+				if a, ok := arg["optional"]; ok && v.Optional == nil && (v.Required != nil && !*v.Required) {
 					optional := a.(bool)
 					v.Optional = &optional
 				}
