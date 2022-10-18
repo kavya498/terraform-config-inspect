@@ -4,6 +4,7 @@ package tfconfig
 type Output struct {
 	Name           string        `json:"name"`
 	Description    string        `json:"description,omitempty"`
+	Value          string        `json:"value,omitempty"`
 	Sensitive      bool          `json:"sensitive,omitempty"`
 	Pos            *SourcePos    `json:"pos,omitempty"`
 	Type           string        `json:"type,omitempty"`

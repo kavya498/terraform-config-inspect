@@ -3,6 +3,7 @@ package tfconfig
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2/hclsyntax"
@@ -209,6 +210,37 @@ func LoadModuleFromFile(file *hcl.File, mod *Module) hcl.Diagnostics {
 				valDiags := gohcl.DecodeExpression(attr.Expr, nil, &sensitive)
 				diags = append(diags, valDiags...)
 				o.Sensitive = sensitive
+			}
+
+			if attr, defined := content.Attributes["value"]; defined {
+				var value string
+
+				// hcl.Expression
+				// traverse output. this traversal only works for static string / direct references
+				// todo: calculations / conditional, function calls, template expressions should be taken care in future.
+				traversal, _ := hcl.AbsTraversalForExpr(attr.Expr)
+				// if travDiags != nil {
+				// 	log.Printf("[Warning] Couldn't traverse output value for %s : %+v", name, travDiags)
+				// }
+
+				if len(traversal) > 0 {
+					value = traversal.RootName()
+					for i := 1; i < len(traversal); i++ {
+						switch ts := traversal[i].(type) {
+						case hcl.TraverseAttr:
+							value = value + "." + ts.Name
+							// Todo: Value should not be of string type. this effects references in the template.
+						default:
+							log.Print("value of output is not traverseAtrr type")
+						}
+						o.Value = value
+					}
+
+				}
+				// else {
+				// 	o.Value = "value of output cannot be traversed"
+				// }
+
 			}
 
 		case "provider":

@@ -92,13 +92,13 @@ func LoadIBMModule(dir string, metadataPath string, fileStruct map[string]interf
 	}
 	// Once the template is loaded and the Module is extracted, find metadata for variables using Module struct and above metadata file.
 	if loadModule.DataResources != nil {
-		findMetadata("data", loadModule.DataResources, loadModule.Variables, metadata)
+		findVariableMetadataFromResourceOrDatasource("data", loadModule.DataResources, loadModule.Variables, metadata)
 	}
 	if loadModule.ManagedResources != nil {
-		findMetadata("resource", loadModule.ManagedResources, loadModule.Variables, metadata)
+		findVariableMetadataFromResourceOrDatasource("resource", loadModule.ManagedResources, loadModule.Variables, metadata)
 	}
 	if loadModule.ModuleCalls != nil && len(loadModule.ModuleCalls) != 0 {
-		loadModuleErr := findModuleMetadata(dir, metadataPath, fileStruct, loadModule.ModuleCalls, loadModule.Variables, metadata)
+		loadModuleErr := findVariableMetadataFromModule(dir, metadataPath, fileStruct, loadModule.ModuleCalls, loadModule.Variables, metadata)
 		if loadModuleErr != nil {
 			err = append(err, Diagnostic{
 				Severity: DiagError,
@@ -107,9 +107,9 @@ func LoadIBMModule(dir string, metadataPath string, fileStruct map[string]interf
 			})
 		}
 	}
-	// if loadModule.Outputs != nil {
-	// 	findOutputMetadata(loadModule.Outputs, metadata)
-	// }
+	if loadModule.Outputs != nil {
+		findOutputMetadataFromResourceOrDatasource(loadModule.Outputs, metadata)
+	}
 	return loadModule, err
 }
 
@@ -176,12 +176,12 @@ func findSubModuleSourcePath(source string) string {
 	return ""
 }
 
-//findModuleMetadata:
+//findVariableMetadataFromModule:
 // dir -->template file directory and metadataPath
 // modules --> modules details from Module struct, variables --> variables from module struct and metadata json as inputs
 // This function first checks for downloaded modules of terraform init under /.terraform/modules/  directory
 // If the module name from modules struct matches any of the downloaded module, repeat the extraction LoadIBMModule
-func findModuleMetadata(dir, metadataPath string, fileStruct map[string]interface{}, modules map[string]*ModuleCall, variables map[string]*Variable, metadata map[string]interface{}) Diagnostics {
+func findVariableMetadataFromModule(dir, metadataPath string, fileStruct map[string]interface{}, modules map[string]*ModuleCall, variables map[string]*Variable, metadata map[string]interface{}) Diagnostics {
 	var err Diagnostics
 	parentModuleName := ""
 	if strings.Contains(dir, "/.terraform/modules/") && len(strings.Split(dir, "/.terraform/modules/")) > 1 {
@@ -326,19 +326,133 @@ func findModuleMetadata(dir, metadataPath string, fileStruct map[string]interfac
 	return err
 }
 
-// findMetadata: This function is common for both resource and datasource.
+// findVariableMetadataFromResourceOrDatasource: This function is common for both resource and datasource.
 // This takes moduleType --> data/resource,
 // resources --> can be resource or datasource details from Module struct,
 // variables --> variables from module struct and metadata json as inputs
 // This checks if a variable reference is present in any of resource attributes.
 // If found, it maps variable to resource/datasource, forms source and extracts provider metadata for that attribute using provider metadata json.
 
-// func findOutputMetadata(outputs map[string]*Output, metadata map[string]interface{}) {
-// 	for _, _ := range outputs {
-// 		// output.
-// 	}
-// }
-func findMetadata(moduleType string, resources map[string]*Resource, variables map[string]*Variable, metadata map[string]interface{}) {
+func findOutputMetadataFromResourceOrDatasource(outputs map[string]*Output, metadata map[string]interface{}) {
+	for _, o := range SortedKeysOfMap(outputs) {
+		output := outputs[o]
+		if output.Value != "" {
+			splitOutput := strings.Split(output.Value, ".")
+			if len(splitOutput) >= 4 {
+				moduleType := splitOutput[len(splitOutput)-4]
+				resourceOrDatasourceName := splitOutput[len(splitOutput)-3]
+				resourceOrDatasourceAttribute := splitOutput[len(splitOutput)-1]
+				if moduleType == "data" {
+					if d, ok := metadata["Datasources"]; ok {
+						ExtractOutputMetadata(output, d, resourceOrDatasourceName, resourceOrDatasourceAttribute)
+					}
+				}
+				if moduleType != "data" && strings.HasPrefix(resourceOrDatasourceName, "ibm_") {
+					if r, ok := metadata["Resources"]; ok {
+						ExtractOutputMetadata(output, r, resourceOrDatasourceName, resourceOrDatasourceAttribute)
+					}
+				}
+			}
+		}
+	}
+}
+
+// Name           string        `json:"name"`
+// 	Description    string        `json:"description,omitempty"`
+// 	Value          string        `json:"value,omitempty"`
+// 	Sensitive      bool          `json:"sensitive,omitempty"`
+// 	Pos            *SourcePos    `json:"pos,omitempty"`
+// 	Type           string        `json:"type,omitempty"`
+// 	Source         []string      `json:"source,omitempty"`
+// 	CloudDataType  string        `json:"cloud_data_type,omitempty" description:"Cloud data type of the variable. eg. resource_group_id, region, vpc_id."`
+// 	CloudDataRange []interface{} `json:"cloud_data_range,omitempty" description:""`
+func ExtractOutputMetadata(o *Output, m interface{}, moduleName, moduleAttribute string) {
+
+	if ma, ok := m.(map[string]interface{})[moduleName]; ok {
+		for _, argument := range ma.([]interface{}) {
+			arg := argument.(map[string]interface{})
+			if arg["name"] == moduleAttribute {
+				// if a, ok := arg["aliases"]; ok && o.Aliases == nil {
+				// 	o.Aliases = a.([]string)
+				// }
+				// if a, ok := arg["options"]; ok && o.AllowedValues == "" {
+				// 	o.AllowedValues = a.(string)
+				// }
+				if a, ok := arg["cloud_data_type"]; ok && o.CloudDataType == "" {
+					o.CloudDataType = a.(string)
+				}
+				// if a, ok := arg["computed"]; ok && o.Computed == nil {
+				// 	computed := a.(bool)
+				// 	o.Computed = &computed
+				// }
+				// if a, ok := arg["default"]; ok && o.Default == nil {
+				// 	o.Default = a
+				// }
+				if a, ok := arg["description"]; ok && o.Description == "" {
+					o.Description = a.(string)
+				}
+				// if a, ok := arg["elem"]; ok && o.Elem == nil {
+				// 	o.Elem = a
+				// }
+				// if a, ok := arg["hidden"]; ok && o.Hidden == nil {
+				// 	hidden := a.(bool)
+				// 	o.Hidden = &hidden
+				// }
+				// if a, ok := arg["immutable"]; ok && o.Immutable == nil {
+				// 	immutable := a.(bool)
+				// 	o.Immutable = &immutable
+				// }
+				// if a, ok := arg["link_status"]; ok && o.LinkStatus == "" {
+				// 	o.LinkStatus = a.(string)
+				// }
+				// if a, ok := arg["matches"]; ok && o.Matches == "" {
+				// 	o.Matches = a.(string)
+				// }
+				// if a, ok := arg["max_items"]; ok && o.MaxItems == nil {
+				// 	maxItems := a.(int)
+				// 	o.MaxItems = &maxItems
+				// }
+				// if a, ok := arg["max_value"]; ok && o.MaxValue == "" {
+				// 	o.MaxValue = a.(string)
+				// }
+				// if a, ok := arg["min_items"]; ok && o.MinItems == nil {
+				// 	minItems := a.(int)
+				// 	o.MinItems = &minItems
+				// }
+				// if a, ok := arg["min_value"]; ok && o.MinValue == "" {
+				// 	o.MinValue = a.(string)
+				// }
+				// if a, ok := arg["min_length"]; ok && o.MinValueLength == nil {
+				// 	o.MinValueLength = a
+				// }
+				// if a, ok := arg["max_length"]; ok && o.MaxValueLength == nil {
+				// 	o.MaxValueLength = a
+				// }
+				// if a, ok := arg["required"]; ok && o.Required == nil {
+				// 	required := a.(bool)
+				// 	o.Required = &required
+				// }
+				// if a, ok := arg["optional"]; ok && o.Optional == nil && (o.Required != nil && !*o.Required) {
+				// 	optional := a.(bool)
+				// 	o.Optional = &optional
+				// }
+				// if a, ok := arg["secure"]; ok && o.Sensitive == nil {
+				// 	o.Sensitive = a.(*bool)
+				// }
+				// if a, ok := arg["deprecated"]; ok && o.Deprecated == "" {
+				// 	o.Deprecated = a.(string)
+				// }
+				if a, ok := arg["cloud_data_range"]; ok && len(o.CloudDataRange) == 0 {
+					o.CloudDataRange = a.([]interface{})
+				}
+			}
+
+		}
+	}
+
+}
+
+func findVariableMetadataFromResourceOrDatasource(moduleType string, resources map[string]*Resource, variables map[string]*Variable, metadata map[string]interface{}) {
 	// since range on map picks keys in random order,
 	// we sort keys using SortedKeysOfMap and range on the the keys
 	for _, v := range SortedKeysOfMap(resources) {
@@ -349,12 +463,12 @@ func findMetadata(moduleType string, resources map[string]*Resource, variables m
 				if moduleType == "data" {
 					source = "data" + "." + source
 					if d, ok := metadata["Datasources"]; ok {
-						ExtractMetadata(v, d, resource.Type, resourceAttribute)
+						ExtractVariableMetadata(v, d, resource.Type, resourceAttribute)
 					}
 				}
 				if moduleType == "resource" {
 					if r, ok := metadata["Resources"]; ok {
-						ExtractMetadata(v, r, resource.Type, resourceAttribute)
+						ExtractVariableMetadata(v, r, resource.Type, resourceAttribute)
 					}
 				}
 				v.Source = append(v.Source, source)
@@ -365,14 +479,14 @@ func findMetadata(moduleType string, resources map[string]*Resource, variables m
 	}
 }
 
-// ExtractMetadata: Takes v --> Variables,
+// ExtractVariableMetadata: Takes v --> Variables,
 // m --> resource or datasource metadata from metadata json file,
 // moduleName -->  resource/datasource name
 // moduleAttribute --> attribute of which metadata has to be extracted.
 //This function check if moduleName has any metadata in m (metadata file), If present,
 // It checks moduleAttribute is present in moduleName metadata, If Present, assign all the metadata to the variable v
 
-func ExtractMetadata(v *Variable, m interface{}, moduleName, moduleAttribute string) {
+func ExtractVariableMetadata(v *Variable, m interface{}, moduleName, moduleAttribute string) {
 
 	if ma, ok := m.(map[string]interface{})[moduleName]; ok {
 		for _, argument := range ma.([]interface{}) {
