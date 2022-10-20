@@ -44,7 +44,7 @@ func CheckForInitDirectoryAndLoadIBMModule(dir string, metadataPath string) (*Mo
 			}
 		}
 	} else {
-		log.Printf("No modules downloaded for %s", dir)
+		log.Printf("[INFO] No modules downloaded for %s", dir)
 	}
 	// LoadIBMModule to extract metadata
 	loadedModule, loadedModuleErr := LoadIBMModule(dir, metadataPath, fileStruct)
@@ -352,7 +352,13 @@ func findOutputMetadataFromResourceOrDatasource(outputs map[string]*Output, meta
 						ExtractOutputMetadata(output, r, resourceOrDatasourceName, resourceOrDatasourceAttribute)
 					}
 				}
+			} else if len(splitOutput) >= 3 && strings.HasPrefix(splitOutput[len(splitOutput)-3], "ibm_") {
+				if r, ok := metadata["Resources"]; ok {
+					ExtractOutputMetadata(output, r, splitOutput[len(splitOutput)-3], splitOutput[len(splitOutput)-1])
+				}
 			}
+			// Todo: add output support for module outputs
+			// parse through the modules and find the outputs and its metadata
 		}
 	}
 }

@@ -231,7 +231,7 @@ func LoadModuleFromFile(file *hcl.File, mod *Module) hcl.Diagnostics {
 							value = value + "." + ts.Name
 							// Todo: Value should not be of string type. this effects references in the template.
 						default:
-							log.Print("value of output is not traverseAtrr type")
+							log.Print("[INFO] Value of output '" + name + "' is not traverseAtrr type")
 						}
 						o.Value = value
 					}
