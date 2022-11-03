@@ -44,7 +44,7 @@ func CheckForInitDirectoryAndLoadIBMModule(dir string, metadataPath string) (*Mo
 			}
 		}
 	} else {
-		log.Printf("[INFO] No modules downloaded for %s", dir)
+		log.Printf("[INFO] This template doesn't have any modules and hence no modules are downloaded for %s", dir)
 	}
 	// LoadIBMModule to extract metadata
 	loadedModule, loadedModuleErr := LoadIBMModule(dir, metadataPath, fileStruct)
@@ -108,7 +108,7 @@ func LoadIBMModule(dir string, metadataPath string, fileStruct map[string]interf
 		}
 	}
 	if loadModule.Outputs != nil {
-		findOutputMetadataFromResourceOrDatasource(loadModule.Outputs, metadata)
+		findOutputMetadataFromResourceOrDatasource(loadModule.Outputs, loadModule.Variables, loadModule.ModuleCalls, metadata)
 	}
 	return loadModule, err
 }
@@ -236,6 +236,7 @@ func findVariableMetadataFromModule(dir, metadataPath string, fileStruct map[str
 				module.DataResources = loadedModulePath.DataResources
 			}
 			if loadedModulePath.Outputs != nil {
+				findOutputMetadataFromResourceOrDatasource(loadedModulePath.Outputs, loadedModulePath.Variables, loadedModulePath.ModuleCalls, metadata)
 				module.Outputs = loadedModulePath.Outputs
 			}
 			// For attributes of modules if variable assigned to the attribute matches any of the Variables struct
@@ -244,7 +245,7 @@ func findVariableMetadataFromModule(dir, metadataPath string, fileStruct map[str
 			for moduleAttribute, moduleVariableValue := range module.Attributes {
 				if modulevariable, ok := variables[moduleVariableValue.(string)]; ok {
 					source := "module." + module.Name
-					if v, ok := loadedModulePath.Variables[moduleAttribute]; ok && len(v.Source) > 0 && (modulevariable.Type == "string" || modulevariable.Type == "number" || modulevariable.Type == "bool" || modulevariable.Type == "list(string)" || modulevariable.Type == "set(string)" || modulevariable.Type == "map") {
+					if v, ok := loadedModulePath.Variables[moduleAttribute]; ok && len(v.Source) > 0 && (modulevariable.Type == "string" || modulevariable.Type == "" || modulevariable.Type == "number" || modulevariable.Type == "bool" || modulevariable.Type == "list(string)" || modulevariable.Type == "set(string)" || modulevariable.Type == "map") {
 
 						if modulevariable.Aliases == nil {
 							modulevariable.Aliases = v.Aliases
@@ -321,6 +322,10 @@ func findVariableMetadataFromModule(dir, metadataPath string, fileStruct map[str
 					sort.Strings(modulevariable.Source)
 				}
 			}
+			if loadedModulePath.Outputs != nil {
+				findOutputMetadataFromResourceOrDatasource(loadedModulePath.Outputs, loadedModulePath.Variables, loadedModulePath.ModuleCalls, metadata)
+				module.Outputs = loadedModulePath.Outputs
+			}
 		}
 	}
 	return err
@@ -333,11 +338,20 @@ func findVariableMetadataFromModule(dir, metadataPath string, fileStruct map[str
 // This checks if a variable reference is present in any of resource attributes.
 // If found, it maps variable to resource/datasource, forms source and extracts provider metadata for that attribute using provider metadata json.
 
-func findOutputMetadataFromResourceOrDatasource(outputs map[string]*Output, metadata map[string]interface{}) {
+func findOutputMetadataFromResourceOrDatasource(outputs map[string]*Output, variables map[string]*Variable, modules map[string]*ModuleCall, metadata map[string]interface{}) {
 	for _, o := range SortedKeysOfMap(outputs) {
 		output := outputs[o]
 		if output.Value != "" {
 			splitOutput := strings.Split(output.Value, ".")
+			if splitOutput[0] == "var" {
+				if v, ok := variables[splitOutput[1]]; ok {
+					output.Name = v.Name
+					output.Description = v.Description
+					output.Type = v.Type
+					output.CloudDataType = v.CloudDataType
+					output.CloudDataRange = v.CloudDataRange
+				}
+			}
 			if len(splitOutput) >= 4 {
 				moduleType := splitOutput[len(splitOutput)-4]
 				resourceOrDatasourceName := splitOutput[len(splitOutput)-3]
@@ -352,13 +366,24 @@ func findOutputMetadataFromResourceOrDatasource(outputs map[string]*Output, meta
 						ExtractOutputMetadata(output, r, resourceOrDatasourceName, resourceOrDatasourceAttribute)
 					}
 				}
-			} else if len(splitOutput) >= 3 && strings.HasPrefix(splitOutput[len(splitOutput)-3], "ibm_") {
-				if r, ok := metadata["Resources"]; ok {
+			} else if len(splitOutput) >= 3 {
+				if r, ok := metadata["Resources"]; ok && strings.HasPrefix(splitOutput[len(splitOutput)-3], "ibm_") {
 					ExtractOutputMetadata(output, r, splitOutput[len(splitOutput)-3], splitOutput[len(splitOutput)-1])
 				}
+				if splitOutput[0] == "module" {
+					if m, ok := modules[splitOutput[1]]; ok {
+						for moduleOutput, moduleOutputValue := range m.Outputs {
+							if splitOutput[2] == moduleOutput {
+								output.Name = moduleOutputValue.Name
+								output.Description = moduleOutputValue.Description
+								output.Type = moduleOutputValue.Type
+								output.CloudDataType = moduleOutputValue.CloudDataType
+								output.CloudDataRange = moduleOutputValue.CloudDataRange
+							}
+						}
+					}
+				}
 			}
-			// Todo: add output support for module outputs
-			// parse through the modules and find the outputs and its metadata
 		}
 	}
 }
@@ -396,6 +421,9 @@ func ExtractOutputMetadata(o *Output, m interface{}, moduleName, moduleAttribute
 				// }
 				if a, ok := arg["description"]; ok && o.Description == "" {
 					o.Description = a.(string)
+				}
+				if a, ok := arg["type"]; ok && o.Type == "" {
+					o.Type = a.(string)
 				}
 				// if a, ok := arg["elem"]; ok && o.Elem == nil {
 				// 	o.Elem = a
@@ -497,8 +525,7 @@ func ExtractVariableMetadata(v *Variable, m interface{}, moduleName, moduleAttri
 	if ma, ok := m.(map[string]interface{})[moduleName]; ok {
 		for _, argument := range ma.([]interface{}) {
 			arg := argument.(map[string]interface{})
-			if arg["name"] == moduleAttribute && (v.Type == "string" || v.Type == "number" || v.Type == "bool" || v.Type == "list(string)" || v.Type == "set(string)" || v.Type == "map") {
-
+			if arg["name"] == moduleAttribute && (v.Type == "string" || v.Type == "" || v.Type == "number" || v.Type == "bool" || v.Type == "list(string)" || v.Type == "set(string)" || v.Type == "map") {
 				if a, ok := arg["aliases"]; ok && v.Aliases == nil {
 					v.Aliases = a.([]string)
 				}
