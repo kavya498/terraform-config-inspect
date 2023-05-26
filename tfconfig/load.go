@@ -591,7 +591,8 @@ func ExtractVariableMetadata(v *Variable, m interface{}, moduleName, moduleAttri
 					v.Optional = &optional
 				}
 				if a, ok := arg["secure"]; ok && v.Sensitive == nil {
-					v.Sensitive = a.(*bool)
+					sensitive := a.(bool)
+					v.Sensitive = &sensitive
 				}
 				if a, ok := arg["deprecated"]; ok && v.Deprecated == "" {
 					v.Deprecated = a.(string)
